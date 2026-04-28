@@ -1,4 +1,4 @@
-const API_BASE= "https://padelhome-production.up.railway.app";
+const API_BASE = "https://padelhome-production.up.railway.app";
 const app = document.getElementById("app");
 const nav = document.getElementById("main-nav");
 
