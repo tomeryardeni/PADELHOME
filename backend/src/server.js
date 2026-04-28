@@ -56,6 +56,17 @@ app.post("/auth/register", async (req, res) => {
   res.status(201).json({ token, user: sanitizeUser(user) });
 });
 
+app.post("/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Missing email or password" });
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return res.status(401).json({ error: "Invalid email or password" });
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) return res.status(401).json({ error: "Invalid email or password" });
+  const token = tokenFor(user.id);
+  res.json({ token, user: sanitizeUser(user) });
+});
+
 app.post("/questionnaire/submit", auth, async (req, res) => {
   const { answers } = req.body;
   if (!Array.isArray(answers) || answers.length !== 7) return res.status(400).json({ error: "Expected 7 answers" });
