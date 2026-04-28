@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PadelMatch MVP</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>PadelMatch</h1>
+      <nav id="main-nav" class="hidden">
+        <button data-route="home">בית</button>
+        <button data-route="coaches">מאמנים</button>
+        <button data-route="chat">צ'אט</button>
+        <button data-route="profile">פרופיל</button>
+      </nav>
+    </header>
+
+    <main id="app"></main>
+
+    <template id="register-template">
+      <section class="screen">
+        <h2>הרשמה</h2>
+        <form id="register-form" class="form">
+          <label>שם מלא <input name="name" required /></label>
+          <label>אימייל <input name="email" type="email" required /></label>
+          <label>סיסמה <input name="password" type="password" minlength="6" required /></label>
+          <label>מיקום <input name="location" required placeholder="תל אביב" /></label>
+          <button type="submit">המשך לשאלון</button>
+        </form>
+      </section>
+    </template>
+
+    <template id="quiz-template">
+      <section class="screen">
+        <h2>שאלון קביעת רמה</h2>
+        <form id="quiz-form" class="form"></form>
+      </section>
+    </template>
+
+    <template id="result-template">
+      <section class="screen">
+        <h2>תוצאת רמה</h2>
+        <p id="level-line"></p>
+        <p id="level-description"></p>
+        <button id="to-home">מעבר למסך הבית</button>
+      </section>
+    </template>
+
+    <template id="home-template">
+      <section class="screen">
+        <h2>בית</h2>
+        <div class="card">
+          <h3>ברוך הבא, <span id="home-name"></span></h3>
+          <p>הרמה שלך: <strong id="home-level"></strong></p>
+          <p>ניקוד שאלון: <strong id="home-score"></strong></p>
+          <p>מיקום: <strong id="home-location"></strong></p>
+        </div>
+        <button id="find-coaches">מצא מאמנים מותאמים</button>
+      </section>
+    </template>
+
+    <template id="coaches-template">
+      <section class="screen">
+        <h2>מאמנים מותאמים</h2>
+        <div id="coaches-list" class="cards"></div>
+      </section>
+    </template>
+
+    <template id="coach-template">
+      <section class="screen">
+        <h2 id="coach-name"></h2>
+        <div class="card">
+          <p>אזור פעילות: <span id="coach-location"></span></p>
+          <p>טווח רמות: <span id="coach-range"></span></p>
+          <p>דירוג ממוצע: <span id="coach-rating"></span></p>
+        </div>
+        <form id="review-form" class="form">
+          <h3>דרג מאמן</h3>
+          <label>דירוג (1-5) <input type="number" name="rating" min="1" max="5" required /></label>
+          <button type="submit">שמור דירוג</button>
+        </form>
+        <form id="recommend-form" class="form">
+          <h3>המלצת מאמן לשינוי רמה</h3>
+          <label>רמה מוצעת
+            <select name="recommendedLevel"></select>
+          </label>
+          <label>הערה <textarea name="note" required></textarea></label>
+          <button type="submit">שלח המלצה</button>
+        </form>
+      </section>
+    </template>
+
+    <template id="chat-template">
+      <section class="screen">
+        <h2>צ'אט בוט MVP</h2>
+        <div id="chat-log" class="chat-log"></div>
+        <form id="chat-form" class="form inline">
+          <input name="question" placeholder="שאל שאלה..." required />
+          <button type="submit">שלח</button>
+        </form>
+      </section>
+    </template>
+
+    <template id="profile-template">
+      <section class="screen">
+        <h2>פרופיל משתמש</h2>
+        <div class="card">
+          <p>שם: <span id="profile-name"></span></p>
+          <p>אימייל: <span id="profile-email"></span></p>
+          <p>מיקום: <span id="profile-location"></span></p>
+          <p>רמה: <span id="profile-level"></span></p>
+          <p>ניקוד: <span id="profile-score"></span></p>
+          <p>תיאור רמה: <span id="profile-description"></span></p>
+        </div>
+        <h3>המלצות מאמנים לשינוי רמה</h3>
+        <div id="recommendations"></div>
+      </section>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,119 @@
+:root {
+  --bg: #f7f9fc;
+  --text: #1b2430;
+  --primary: #0f766e;
+  --accent: #f59e0b;
+  --card: #ffffff;
+  --border: #d8e0ea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--primary);
+  color: #fff;
+}
+
+h1, h2, h3 {
+  margin: 0 0 12px;
+}
+
+main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.screen {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+}
+
+.form.inline {
+  grid-template-columns: 1fr auto;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+input, select, textarea, button {
+  font: inherit;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+button {
+  cursor: pointer;
+  background: var(--primary);
+  color: #fff;
+  border: 0;
+}
+
+#main-nav {
+  display: flex;
+  gap: 8px;
+}
+
+#main-nav button {
+  background: #ffffff1a;
+  border: 1px solid #ffffff3d;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.cards {
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.chat-log {
+  min-height: 160px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #fbfdff;
+}
+
+.chat-log p {
+  margin: 0 0 8px;
+}
+
+.coach-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
