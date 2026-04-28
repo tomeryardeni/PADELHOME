@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 Int                   @id @default(autoincrement())
+  name               String
+  email              String                @unique
+  passwordHash       String
+  location           String
+  level              Float?
+  levelScore         Int?
+  levelDescription   String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  levelAnswers       LevelAnswer[]
+  reviews            Review[]
+  recommendations    CoachRecommendation[]
+}
+
+model Coach {
+  id                 Int                   @id @default(autoincrement())
+  name               String
+  location           String
+  minLevel           Float
+  maxLevel           Float
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  reviews            Review[]
+  recommendations    CoachRecommendation[]
+
+  @@unique([name, location])
+}
+
+model Review {
+  id                 Int                   @id @default(autoincrement())
+  coachId            Int
+  userId             Int
+  rating             Int
+  createdAt          DateTime              @default(now())
+  coach              Coach                 @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LevelAnswer {
+  id                 Int                   @id @default(autoincrement())
+  userId             Int
+  questionId         Int
+  answerValue        Int
+  createdAt          DateTime              @default(now())
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CoachRecommendation {
+  id                 Int                   @id @default(autoincrement())
+  coachId            Int
+  userId             Int
+  recommendedLevel   Float
+  note               String
+  status             String                @default("pending")
+  createdAt          DateTime              @default(now())
+  coach              Coach                 @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
