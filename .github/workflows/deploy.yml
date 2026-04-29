@@ -2,8 +2,7 @@ name: Auto Redeploy
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -11,17 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Vercel Deploy Hook
-        if: ${{ secrets.VERCEL_DEPLOY_HOOK_URL != '' }}
-        run: |
-          curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
-
-      - name: Trigger Railway Redeploy
-        if: ${{ secrets.RAILWAY_API_TOKEN != '' && secrets.RAILWAY_SERVICE_ID != '' }}
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-        run: |
-          curl -X POST "https://backboard.railway.app/graphql/v2" \
-            -H "Authorization: Bearer ${RAILWAY_API_TOKEN}" \
-            -H "Content-Type: application/json" \
-            --data '{"query":"mutation serviceInstanceRedeploy($serviceId: String!) { serviceInstanceRedeploy(serviceId: $serviceId) }","variables":{"serviceId":"'"${RAILWAY_SERVICE_ID}"'"}}'
+        run: curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
