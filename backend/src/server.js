@@ -54,196 +54,80 @@ function sanitizeUser(user) {
   };
 }
 
-function inferTopic(question) {
-  const q = question.toLowerCase();
-  if (q.includes("וולי") || q.includes("volley")) return "volley";
-  if (q.includes("קיר") || q.includes("wall") || q.includes("glass")) return "wall";
-  if (q.includes("לוב") || q.includes("lob")) return "lob";
-  if (q.includes("טקט") || q.includes("position") || q.includes("strategy")) return "tactics";
-  if (q.includes("ראלי") || q.includes("consistency")) return "consistency";
-  return "general";
-}
-
-function buildResources(question, topic) {
-  const encoded = encodeURIComponent(`padel ${question}`);
-  const byTopic = {
-    volley: [
-      { title: "YouTube: Padel Volley Drills", url: "https://www.youtube.com/results?search_query=padel+volley+drills" },
-      { title: "Article: Padel Volley Technique", url: "https://thepadelschool.com/" }
-    ],
-    wall: [
-      { title: "YouTube: Padel Wall Shots", url: "https://www.youtube.com/results?search_query=padel+wall+shots+tutorial" },
-      { title: "Article: Playing Off The Glass", url: "https://www.redbull.com/int-en/padel-rules-and-tips" }
-    ],
-    lob: [
-      { title: "YouTube: Padel Lob Tutorial", url: "https://www.youtube.com/results?search_query=padel+lob+tutorial" },
-      { title: "Article: Lob Decision Making", url: "https://thepadelpaper.com/" }
-    ],
-    tactics: [
-      { title: "YouTube: Padel Tactics", url: "https://www.youtube.com/results?search_query=padel+tactics+positioning" },
-      { title: "Article: Tactical Basics", url: "https://thepadelschool.com/" }
-    ],
-    consistency: [
-      { title: "YouTube: Padel Consistency Drills", url: "https://www.youtube.com/results?search_query=padel+consistency+drills" },
-      { title: "Article: Improving Rally Control", url: "https://www.worldpadeltourtv.com/" }
-    ],
-    general: [
-      { title: "YouTube: General Padel Tips", url: "https://www.youtube.com/results?search_query=padel+tips+for+beginners" },
-      { title: "Article: Padel Fundamentals", url: "https://www.padelfip.com/" }
-    ]
-  };
-  return [
-    ...(byTopic[topic] || byTopic.general),
-    { title: "More results for your exact question", url: `https://www.youtube.com/results?search_query=${encoded}` }
-  ];
-}
-
-function buildConcreteReply(topic, userLevel, tips) {
-  const opening = `לפי הרמה שלך (${userLevel ?? "לא נקבעה"}) הנה תשובה ממוקדת:`;
-  const topicLine = {
-    volley: "בוולי: שמור מחבט גבוה לפני המגע, פגוש את הכדור מוקדם, וסגור זווית עם צעד קדמי קטן.",
-    wall: "במשחק מהקיר: תן לכדור לצאת מהזכוכית לפני החבטה, שמור מרחק גוף יציב מהקיר, וכוון עומק למרכז המגרש.",
-    lob: "בלוב: עדיף חצי-גבוה עם עומק מאשר לוב מהיר ונמוך; המטרה היא להחזיר עמדה לרשת.",
-    tactics: "בטקטיקה: שחקו כזוג ברוחב מתואם, הימנעו מ'חור' באמצע, והעדיפו כדור בטוח לפני ניסיון ווינר.",
-    consistency: "בראלי: עדיפות לדיוק וקצב קבוע; ספור 8-10 חבטות יציבות לפני העלאת סיכון.",
-    general: "כרגע הכי חשוב לבנות עקביות, מיקום, והבנת החלטות בסיסיות בכל נקודה."
-  };
-  return `${opening} ${topicLine[topic] || topicLine.general} ${tips.join(" ")}`.trim();
-}
-
-async function generateEnhancedReply({ question, user, answers, baseReply }) {
-  if (!process.env.OPENAI_API_KEY) return baseReply;
-  try {
-    const prompt = `
-You are a professional padel coach assistant.
-User level: ${user.level ?? "unknown"}
-User score: ${user.levelScore ?? "unknown"}
-Question: ${question}
-Answers summary: ${JSON.stringify(answers)}
-
-Give a concise and concrete Hebrew answer in 4-6 lines with practical drills.
-`;
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-        input: prompt
-      })
-    });
-    if (!response.ok) return baseReply;
-    const data = await response.json();
-    const text = data?.output_text?.trim();
-    return text || baseReply;
-  } catch {
-    return baseReply;
-  }
-}
-
-async function rankCoachesWithAI({ user, coaches, goal }) {
-  if (!coaches.length) return [];
+async function understandAndAnswerWithAI({ question, user, answers, recentMessages = [] }) {
   if (!process.env.OPENAI_API_KEY) {
-    return coaches
-      .map((c) => ({
-        coachId: c.id,
-        score: 70 + Math.min(20, c.reviews.length * 2),
-        reason: "התאמה לפי רמה/מיקום ודירוג."
-      }))
-      .sort((a, b) => b.score - a.score);
+    return {
+      answer: `לפי הרמה שלך (${user.level ?? "לא נקבעה"}), תתמקד בעקביות, מיקום ודיוק. שאל אותי שוב עם פירוט מטרה ואבנה תרגול מדויק.`,
+      resourcesQuery: `padel ${question}`,
+      drills: ["3 סטים של 10 דקות תרגול ממוקד", "מעקב טעויות חוזרות", "סיכום 3 לקחים בסוף אימון"]
+    };
   }
 
-  const prompt = `
-Rank these padel coaches for this user.
-User level: ${user.level}
-User location: ${user.location}
-Goal: ${goal || "general improvement"}
-Coaches: ${JSON.stringify(
-    coaches.map((c) => ({
-      id: c.id,
-      name: c.name,
-      location: c.location,
-      minLevel: c.minLevel,
-      maxLevel: c.maxLevel,
-      reviews: c.reviews.length
-    }))
-  )}
-Return JSON array: [{coachId:number, score:number, reason:string}] sorted desc by score.
+  const system = `
+אתה מאמן פאדל מקצועי. תענה בעברית, קצר וקונקרטי.
+הבן לבד את הכוונה מהשאלה והקונטקסט (למשל סרב=הגשה בפאדל).
+החזר JSON בלבד בפורמט:
+{
+  "intent": "short string",
+  "subtopic": "short string",
+  "answer": "4-6 שורות מעשיות",
+  "resourcesQuery": "query for YouTube/articles",
+  "drills": ["...", "...", "..."]
+}
+אין טקסט מחוץ ל-JSON.
 `;
 
-  try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-        input: prompt
-      })
-    });
-    if (!response.ok) return [];
-    const data = await response.json();
-    const text = data?.output_text || "[]";
-    const parsed = JSON.parse(text);
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    return [];
-  }
-}
-
-async function buildWeeklyPlan({ user, answers, goal }) {
-  const base = {
-    summary: `תוכנית 7 ימים לרמה ${user.level ?? "לא נקבעה"} עם דגש על ${goal || "שיפור כללי"}.`,
-    days: [
-      { day: 1, focus: "יציבות ראלי", drill: "4 סטים של 6 דק' ראלי בקצב בינוני", target: "15 חבטות רצופות" },
-      { day: 2, focus: "וולי", drill: "3 סטים של 20 חזרות וולי פור-הנד/בק-הנד", target: "80% דיוק" },
-      { day: 3, focus: "משחק מהקיר", drill: "3 סטים של 15 חזרות יציאה מהקיר", target: "10 כדורים עמוקים" },
-      { day: 4, focus: "לוב והגנה", drill: "3 סטים של 12 לובים לעומק", target: "70% עומק קו אחורי" },
-      { day: 5, focus: "טקטיקה בזוגות", drill: "45 דק' תרגיל מיקום וחילוף קווי כיסוי", target: "צמצום טעויות מיקום" },
-      { day: 6, focus: "משחקון לחץ", drill: "2 משחקונים ל-10 נקודות בקצב גבוה", target: "שמירה על קבלת החלטה נכונה" },
-      { day: 7, focus: "סיכום ובקרה", drill: "סט אחד מלא + תיעוד טעויות חוזרות", target: "3 לקחים לשבוע הבא" }
+  const payload = {
+    model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+    input: [
+      { role: "system", content: system },
+      {
+        role: "user",
+        content: JSON.stringify({
+          question,
+          user: {
+            level: user.level,
+            levelScore: user.levelScore,
+            location: user.location
+          },
+          answers,
+          recentMessages
+        })
+      }
     ]
   };
 
-  if (!process.env.OPENAI_API_KEY) return base;
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+    },
+    body: JSON.stringify(payload)
+  });
 
-  try {
-    const prompt = `
-Create a specific 7-day padel plan in Hebrew as JSON.
-User level: ${user.level}
-User score: ${user.levelScore}
-Goal: ${goal || "general"}
-Answers: ${JSON.stringify(answers)}
-Return:
-{
- "summary": "...",
- "days": [{"day":1,"focus":"...","drill":"...","target":"..."}]
+  if (!response.ok) throw new Error("AI request failed");
+  const data = await response.json();
+  const text = (data.output_text || "").trim();
+
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  const jsonText = start >= 0 && end > start ? text.slice(start, end + 1) : "{}";
+  const parsed = JSON.parse(jsonText);
+
+  return {
+    answer: parsed.answer || "לא הצלחתי לייצר תשובה כרגע.",
+    resourcesQuery: parsed.resourcesQuery || `padel ${question}`,
+    drills: Array.isArray(parsed.drills) ? parsed.drills : []
+  };
 }
-`;
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-        input: prompt
-      })
-    });
-    if (!response.ok) return base;
-    const data = await response.json();
-    const parsed = JSON.parse(data?.output_text || "{}");
-    if (!parsed?.days || !Array.isArray(parsed.days)) return base;
-    return parsed;
-  } catch {
-    return base;
-  }
+
+function buildResourcesFromQuery(resourcesQuery) {
+  const q = encodeURIComponent(resourcesQuery || "padel training");
+  return [
+    { title: "YouTube results", url: `https://www.youtube.com/results?search_query=${q}` },
+    { title: "Google results", url: `https://www.google.com/search?q=${q}` }
+  ];
 }
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -345,58 +229,53 @@ app.post("/coach-recommendations", auth, async (req, res) => {
 });
 
 app.post("/chat", auth, async (req, res) => {
-  const { question } = req.body;
-  if (!question || !String(question).trim()) return res.status(400).json({ error: "Missing question" });
+  try {
+    const { question } = req.body;
+    if (!question || !String(question).trim()) return res.status(400).json({ error: "Missing question" });
 
-  const user = await prisma.user.findUnique({ where: { id: req.userId } });
-  const answers = await prisma.levelAnswer.findMany({ where: { userId: req.userId } });
-  const byQ = Object.fromEntries(answers.map((a) => [a.questionId, a.answerValue]));
-  const tips = [];
-  if ((byQ[4] ?? 4) <= 1) tips.push("מומלץ לתרגל משחק קיר פעמיים בשבוע.");
-  if ((byQ[3] ?? 4) <= 1) tips.push("כדאי לתרגל וולי קצר עם דגש על מיקום.");
-  if ((byQ[6] ?? 4) <= 2) tips.push("שפר הבנה טקטית דרך תרגילי מיקום זוגי.");
-  if (!tips.length) tips.push("המשך לעבוד על עקביות ולחץ נקודתי.");
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    const answers = await prisma.levelAnswer.findMany({ where: { userId: req.userId }, orderBy: { questionId: "asc" } });
+    const recentMessages = [];
 
-  const topic = inferTopic(String(question));
-  const baseReply = buildConcreteReply(topic, user.level, tips);
-  const reply = await generateEnhancedReply({ question, user, answers, baseReply });
-  const resources = buildResources(String(question), topic);
+    const ai = await understandAndAnswerWithAI({
+      question: String(question),
+      user,
+      answers,
+      recentMessages
+    });
 
-  res.json({ reply, resources });
-});
+    const resources = buildResourcesFromQuery(ai.resourcesQuery);
 
-app.post("/ai/coach-match", auth, async (req, res) => {
-  const { goal } = req.body || {};
-  const user = await prisma.user.findUnique({ where: { id: req.userId } });
-  const coaches = await prisma.coach.findMany({
-    where: {
-      location: user.location,
-      minLevel: { lte: user.level ?? 1 },
-      maxLevel: { gte: user.level ?? 1 }
-    },
-    include: { reviews: true }
-  });
-
-  const ranking = await rankCoachesWithAI({ user, coaches, goal });
-  const byId = new Map(coaches.map((c) => [c.id, c]));
-  const ranked = ranking
-    .map((r) => ({
-      coachId: r.coachId,
-      score: r.score,
-      reason: r.reason,
-      coach: byId.get(r.coachId)
-    }))
-    .filter((x) => x.coach);
-
-  res.json({ rankedCoaches: ranked });
+    res.json({
+      reply: ai.answer,
+      drills: ai.drills,
+      resources
+    });
+  } catch {
+    res.status(500).json({ error: "Chat failed" });
+  }
 });
 
 app.post("/insights/weekly-plan", auth, async (req, res) => {
-  const { goal } = req.body || {};
-  const user = await prisma.user.findUnique({ where: { id: req.userId } });
-  const answers = await prisma.levelAnswer.findMany({ where: { userId: req.userId } });
-  const plan = await buildWeeklyPlan({ user, answers, goal });
-  res.json({ plan });
+  try {
+    const { goal } = req.body || {};
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    const plan = {
+      summary: `תוכנית 7 ימים לרמה ${user.level ?? "לא נקבעה"} עם דגש על ${goal || "שיפור כללי"}.`,
+      days: [
+        { day: 1, focus: "יציבות ראלי", drill: "4 סטים של 6 דק' ראלי", target: "15 חבטות רצופות" },
+        { day: 2, focus: "וולי", drill: "3 סטים של 20 חזרות", target: "80% דיוק" },
+        { day: 3, focus: "משחק מהקיר", drill: "3 סטים של 15 חזרות", target: "10 כדורים עמוקים" },
+        { day: 4, focus: "לוב והגנה", drill: "3 סטים של 12 לובים", target: "70% עומק" },
+        { day: 5, focus: "טקטיקה זוגית", drill: "45 דק' מיקום", target: "פחות טעויות מיקום" },
+        { day: 6, focus: "משחקון לחץ", drill: "2 משחקונים ל-10 נק'", target: "החלטות נכונות" },
+        { day: 7, focus: "סיכום", drill: "סט מלא + תיעוד", target: "3 לקחים" }
+      ]
+    };
+    res.json({ plan });
+  } catch {
+    res.status(500).json({ error: "Plan failed" });
+  }
 });
 
 const port = Number(process.env.PORT || 4000);
