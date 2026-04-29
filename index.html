@@ -13,6 +13,7 @@
         <button data-route="home">בית</button>
         <button data-route="coaches">מאמנים</button>
         <button data-route="chat">צ'אט</button>
+        <button data-route="plan">תוכנית</button>
         <button data-route="profile">פרופיל</button>
         <button id="logout-btn" type="button">התנתק</button>
       </nav>
@@ -108,6 +109,18 @@
           <input name="question" placeholder="שאל שאלה..." required />
           <button type="submit">שלח</button>
         </form>
+      </section>
+    </template>
+
+    <template id="plan-template">
+      <section class="screen">
+        <h2>תוכנית שבועית</h2>
+        <form id="plan-form" class="form inline">
+          <input name="goal" placeholder="מטרה לשבוע הקרוב (אופציונלי)" />
+          <button type="submit">צור תוכנית</button>
+        </form>
+        <div id="plan-summary" class="card hidden"></div>
+        <div id="plan-days" class="cards"></div>
       </section>
     </template>
 
