@@ -66,10 +66,8 @@ async function understandAndAnswerWithAI({ question, user, answers, recentMessag
   const system = `
 אתה מאמן פאדל מקצועי. תענה בעברית, קצר וקונקרטי.
 הבן לבד את הכוונה מהשאלה והקונטקסט (למשל סרב=הגשה בפאדל).
-החזר JSON בלבד בפורמט:
+החזר JSON בלבד:
 {
-  "intent": "short string",
-  "subtopic": "short string",
   "answer": "4-6 שורות מעשיות",
   "resourcesQuery": "query for YouTube/articles",
   "drills": ["...", "...", "..."]
@@ -77,48 +75,64 @@ async function understandAndAnswerWithAI({ question, user, answers, recentMessag
 אין טקסט מחוץ ל-JSON.
 `;
 
-  const payload = {
-    model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-    input: [
-      { role: "system", content: system },
-      {
-        role: "user",
-        content: JSON.stringify({
-          question,
-          user: {
-            level: user.level,
-            levelScore: user.levelScore,
-            location: user.location
-          },
-          answers,
-          recentMessages
-        })
-      }
-    ]
-  };
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        {
+          role: "user",
+          content: JSON.stringify({
+            question,
+            user: {
+              level: user.level,
+              levelScore: user.levelScore,
+              location: user.location
+            },
+            answers,
+            recentMessages
+          })
+        }
+      ]
+    })
   });
 
-  if (!response.ok) throw new Error("AI request failed");
-  const data = await response.json();
-  const text = (data.output_text || "").trim();
+  if (!response.ok) {
+    const errTxt = await response.text();
+    throw new Error(`AI request failed: ${errTxt}`);
+  }
 
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  const jsonText = start >= 0 && end > start ? text.slice(start, end + 1) : "{}";
-  const parsed = JSON.parse(jsonText);
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content || "{}";
+
+  let parsed = {};
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    parsed = {};
+  }
+
+  const answer = parsed.answer?.trim();
+  const resourcesQuery = parsed.resourcesQuery?.trim();
+  const drills = Array.isArray(parsed.drills) ? parsed.drills : [];
 
   return {
-    answer: parsed.answer || "לא הצלחתי לייצר תשובה כרגע.",
-    resourcesQuery: parsed.resourcesQuery || `padel ${question}`,
-    drills: Array.isArray(parsed.drills) ? parsed.drills : []
+    answer: answer || `לפי הרמה שלך (${user.level ?? "לא נקבעה"}), תעבוד על שליטה בכדור הראשון אחרי קיר עם מיקום מוקדם ויציבה נמוכה.`,
+    resourcesQuery: resourcesQuery || "padel wall return technique",
+    drills: drills.length
+      ? drills
+      : [
+          "3 סטים של 12 כדורים: יציאה מהקיר וחזרה למרכז",
+          "2 סטים של 10 כדורים לעומק לאחר קיר",
+          "משחקון קצר עם יעד: 70% החזרות נקיות"
+        ]
   };
 }
 
@@ -164,7 +178,11 @@ app.post("/questionnaire/submit", auth, async (req, res) => {
   await prisma.$transaction([
     prisma.levelAnswer.deleteMany({ where: { userId: req.userId } }),
     prisma.levelAnswer.createMany({
-      data: answers.map((a) => ({ userId: req.userId, questionId: Number(a.questionId), answerValue: Number(a.answerValue) }))
+      data: answers.map((a) => ({
+        userId: req.userId,
+        questionId: Number(a.questionId),
+        answerValue: Number(a.answerValue)
+      }))
     }),
     prisma.user.update({
       where: { id: req.userId },
@@ -189,28 +207,41 @@ app.get("/coaches/match", auth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.userId } });
   if (user.level === null) return res.status(400).json({ error: "Questionnaire not completed" });
   const coaches = await prisma.coach.findMany({
-    where: { location: user.location, minLevel: { lte: user.level }, maxLevel: { gte: user.level } },
+    where: {
+      location: user.location,
+      minLevel: { lte: user.level },
+      maxLevel: { gte: user.level }
+    },
     include: { reviews: true }
   });
   res.json({
     coaches: coaches.map((c) => ({
       ...c,
-      avgRating: c.reviews.length ? (c.reviews.reduce((s, r) => s + r.rating, 0) / c.reviews.length).toFixed(1) : "N/A"
+      avgRating: c.reviews.length
+        ? (c.reviews.reduce((s, r) => s + r.rating, 0) / c.reviews.length).toFixed(1)
+        : "N/A"
     }))
   });
 });
 
 app.get("/coaches/:id", auth, async (req, res) => {
-  const coach = await prisma.coach.findUnique({ where: { id: Number(req.params.id) }, include: { reviews: true } });
+  const coach = await prisma.coach.findUnique({
+    where: { id: Number(req.params.id) },
+    include: { reviews: true }
+  });
   if (!coach) return res.status(404).json({ error: "Coach not found" });
-  const avgRating = coach.reviews.length ? (coach.reviews.reduce((s, r) => s + r.rating, 0) / coach.reviews.length).toFixed(1) : "N/A";
+  const avgRating = coach.reviews.length
+    ? (coach.reviews.reduce((s, r) => s + r.rating, 0) / coach.reviews.length).toFixed(1)
+    : "N/A";
   res.json({ coach: { ...coach, avgRating } });
 });
 
 app.post("/reviews", auth, async (req, res) => {
   const { coachId, rating } = req.body;
   if (rating < 1 || rating > 5) return res.status(400).json({ error: "rating must be 1-5" });
-  const review = await prisma.review.create({ data: { coachId: Number(coachId), userId: req.userId, rating: Number(rating) } });
+  const review = await prisma.review.create({
+    data: { coachId: Number(coachId), userId: req.userId, rating: Number(rating) }
+  });
   res.status(201).json({ review });
 });
 
@@ -231,17 +262,21 @@ app.post("/coach-recommendations", auth, async (req, res) => {
 app.post("/chat", auth, async (req, res) => {
   try {
     const { question } = req.body;
-    if (!question || !String(question).trim()) return res.status(400).json({ error: "Missing question" });
+    if (!question || !String(question).trim()) {
+      return res.status(400).json({ error: "Missing question" });
+    }
 
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
-    const answers = await prisma.levelAnswer.findMany({ where: { userId: req.userId }, orderBy: { questionId: "asc" } });
-    const recentMessages = [];
+    const answers = await prisma.levelAnswer.findMany({
+      where: { userId: req.userId },
+      orderBy: { questionId: "asc" }
+    });
 
     const ai = await understandAndAnswerWithAI({
       question: String(question),
       user,
       answers,
-      recentMessages
+      recentMessages: []
     });
 
     const resources = buildResourcesFromQuery(ai.resourcesQuery);
@@ -260,6 +295,7 @@ app.post("/insights/weekly-plan", auth, async (req, res) => {
   try {
     const { goal } = req.body || {};
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
+
     const plan = {
       summary: `תוכנית 7 ימים לרמה ${user.level ?? "לא נקבעה"} עם דגש על ${goal || "שיפור כללי"}.`,
       days: [
@@ -272,6 +308,7 @@ app.post("/insights/weekly-plan", auth, async (req, res) => {
         { day: 7, focus: "סיכום", drill: "סט מלא + תיעוד", target: "3 לקחים" }
       ]
     };
+
     res.json({ plan });
   } catch {
     res.status(500).json({ error: "Plan failed" });
