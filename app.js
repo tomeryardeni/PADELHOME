@@ -1,6 +1,7 @@
 const API_BASE = "https://padelhome-production.up.railway.app";
 const app = document.getElementById("app");
 const nav = document.getElementById("main-nav");
+const logoutBtn = document.getElementById("logout-btn");
 
 const questions = [
   { id: 1, title: "כמה זמן אתה משחק פאדל?", options: ["אף פעם לא שיחקתי", "כמה שבועות", "כמה חודשים", "מעל שנה", "מספר שנים"] },
@@ -15,7 +16,6 @@ const questions = [
 const state = {
   token: localStorage.getItem("token"),
   user: null,
-  answers: [],
   currentCoachId: null
 };
 
@@ -28,6 +28,13 @@ async function api(path, options = {}) {
     throw new Error(err.error || "API error");
   }
   return res.json();
+}
+
+function logout() {
+  state.token = null;
+  state.user = null;
+  localStorage.removeItem("token");
+  render("register");
 }
 
 function canAccessApp() {
@@ -48,6 +55,7 @@ function render(route = "register") {
   if (route === "coaches") return initCoaches();
   if (route === "coach") return initCoach();
   if (route === "chat") return initChat();
+  if (route === "plan") return initPlan();
   if (route === "profile") return initProfile();
 }
 
@@ -58,9 +66,7 @@ async function bootstrap() {
     state.user = data.user;
     render(state.user.level === null ? "quiz" : "home");
   } catch {
-    localStorage.removeItem("token");
-    state.token = null;
-    render("register");
+    logout();
   }
 }
 
@@ -82,6 +88,26 @@ function initRegister() {
       localStorage.setItem("token", data.token);
       state.user = data.user;
       render("quiz");
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const data = await api("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: fd.get("email").trim(),
+          password: fd.get("password")
+        })
+      });
+      state.token = data.token;
+      localStorage.setItem("token", data.token);
+      state.user = data.user;
+      render(state.user.level === null ? "quiz" : "home");
     } catch (err) {
       alert(err.message);
     }
@@ -120,7 +146,6 @@ function initQuiz() {
     const answers = questions.map((q) => ({ questionId: q.id, answerValue: Number(fd.get(`q${q.id}`)) }));
     try {
       const data = await api("/questionnaire/submit", { method: "POST", body: JSON.stringify({ answers }) });
-      state.answers = answers;
       state.user = data.user;
       render("result");
     } catch (err) {
@@ -175,6 +200,7 @@ async function initCoach() {
   document.getElementById("coach-location").textContent = coach.location;
   document.getElementById("coach-range").textContent = `${coach.minLevel} - ${coach.maxLevel}`;
   document.getElementById("coach-rating").textContent = coach.avgRating;
+
   const reviewForm = document.getElementById("review-form");
   reviewForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -183,6 +209,7 @@ async function initCoach() {
     alert("הדירוג נשמר.");
     render("coach");
   });
+
   const select = document.querySelector('select[name="recommendedLevel"]');
   [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].forEach((lvl) => {
     const option = document.createElement("option");
@@ -190,22 +217,33 @@ async function initCoach() {
     option.textContent = String(lvl);
     select.appendChild(option);
   });
+
   const recommendForm = document.getElementById("recommend-form");
   recommendForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(recommendForm);
     await api("/coach-recommendations", {
       method: "POST",
-      body: JSON.stringify({ coachId: coach.id, recommendedLevel: Number(fd.get("recommendedLevel")), note: fd.get("note").trim() })
+      body: JSON.stringify({
+        coachId: coach.id,
+        recommendedLevel: Number(fd.get("recommendedLevel")),
+        note: fd.get("note").trim()
+      })
     });
-    alert("המלצת המאמן נשלחה וממתינה לאישור.");
+    alert("המלצת המאמן נשלחה.");
     recommendForm.reset();
   });
 }
 
+function renderResources(resources) {
+  if (!Array.isArray(resources) || !resources.length) return "";
+  const items = resources.map((r) => `<li><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.title}</a></li>`).join("");
+  return `<ul>${items}</ul>`;
+}
+
 function initChat() {
   const log = document.getElementById("chat-log");
-  log.innerHTML = "<p><strong>בוט:</strong> היי! שאל אותי על שיפור משחק או מציאת מאמן.</p>";
+  log.innerHTML = "<p><strong>בוט:</strong> שאל אותי שאלה מקצועית ואחזיר גם מקורות.</p>";
   const form = document.getElementById("chat-form");
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -213,7 +251,38 @@ function initChat() {
     const data = await api("/chat", { method: "POST", body: JSON.stringify({ question }) });
     log.innerHTML += `<p><strong>אתה:</strong> ${question}</p>`;
     log.innerHTML += `<p><strong>בוט:</strong> ${data.reply}</p>`;
+    log.innerHTML += renderResources(data.resources);
     form.reset();
+  });
+}
+
+function renderPlan(plan) {
+  const summaryEl = document.getElementById("plan-summary");
+  const daysEl = document.getElementById("plan-days");
+  summaryEl.classList.remove("hidden");
+  summaryEl.innerHTML = `<p>${plan.summary}</p>`;
+  daysEl.innerHTML = "";
+  plan.days.forEach((d) => {
+    const card = document.createElement("article");
+    card.className = "card";
+    card.innerHTML = `<h3>יום ${d.day}</h3><p><strong>פוקוס:</strong> ${d.focus}</p><p><strong>תרגיל:</strong> ${d.drill}</p><p><strong>יעד:</strong> ${d.target}</p>`;
+    daysEl.appendChild(card);
+  });
+}
+
+function initPlan() {
+  const form = document.getElementById("plan-form");
+  const daysEl = document.getElementById("plan-days");
+  daysEl.innerHTML = "<p>לחץ 'צור תוכנית' כדי לקבל תוכנית 7 ימים מותאמת.</p>";
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const goal = new FormData(form).get("goal").trim();
+    try {
+      const data = await api("/insights/weekly-plan", { method: "POST", body: JSON.stringify({ goal }) });
+      renderPlan(data.plan);
+    } catch (err) {
+      daysEl.innerHTML = `<p>${err.message}</p>`;
+    }
   });
 }
 
@@ -241,6 +310,7 @@ async function initProfile() {
   });
 }
 
+logoutBtn.addEventListener("click", logout);
 nav.addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-route]");
   if (!btn) return;
